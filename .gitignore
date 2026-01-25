@@ -1,0 +1,112 @@
+# Rust/Cargo
+/target/
+**/*.rs.bk
+*.pdb
+Cargo.lock
+
+# Bevy-specific
+# Remove Cargo.lock from ignore if this is a binary crate you want to lock dependencies for
+# Cargo.lock
+# Shader hot-reload cache
+/assets/.bevy/
+
+# Bevy internal cache (older versions)
+.bevy/
+
+# Build artifacts
+/debug/
+/release/
+*.dll
+*.exe
+*.so
+*.dylib
+
+# IDE/Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.iml
+.project
+.classpath
+.settings/
+*.code-workspace
+
+# JetBrains
+.idea/
+*.iml
+.idea_modules/
+
+# Visual Studio Code
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# Rust Analyzer
+rust-project.json
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Linux
+*~
+.directory
+.Trash-*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Backup files
+*.bak
+*.tmp
+*.temp
+
+# Logs
+*.log
+logs/
+
+# Distribution / packaging
+dist/
+build/
+*.wasm
+
+# Bevy hot reloading
+.bevy/
+
+# Asset processing cache (if using Bevy asset processor)
+imported_assets/
+
+# --------------------
+# Coverage / profiling
+# --------------------
+*.profraw
+*.lcov
+perf.data
+perf.data.old
+*.prof
+flamegraph.svg
+
+# Testing
+tarpaulin-report.html
+cobertura.xml
+
+# Documentation
+/doc/
+/target/doc/
+
+# Environment
+.env
+.env.local
+.envrc
+
+# Distrobox specific (optional - if you want to track the setup script, remove these)
+# init_distrobox.sh
