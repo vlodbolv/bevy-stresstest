@@ -1,13 +1,23 @@
 [package]
-name = "bevy-dev"
+name = "bevy-test"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-bevy = "0.18"
+bevy = "0.15" # Assuming you are on 0.15 (0.18 is future/hypothetical)
 
+# --- DEVELOPMENT PROFILE (cargo run) ---
 [profile.dev]
-opt-level = 1
+opt-level = 1 # Optimize my code a little (level 1)
 
+# Optimize all dependencies (Bevy, wgpu, etc.) to the max.
+# This makes dev builds smooth without waiting for full optimization.
 [profile.dev.package."*"]
 opt-level = 3
+
+# --- RELEASE PROFILE (cargo run --release) ---
+[profile.release]
+opt-level = 3
+lto = "thin"       # <--- This works here (global profile), but not in 'package'
+codegen-units = 1  # Slower compile time, faster performance
+strip = true       # Removes debug symbols to make binary smaller
