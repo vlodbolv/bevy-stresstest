@@ -1,11 +1,7 @@
-// main.rs - Bevy 0.18 Ultimate Stress Test
+// main.rs - Bevy 0.18 Ultimate Stress Test (Torus Edition - Clean)
 // 
-// Environment: Linux (Aurora 43) / i9-13900HK
-// Features: 
-// - Parallel ECS Animation (14-core optimization)
-// - Dynamic Batch Stacking (Tornado effect)
-// - Total Entity Counter UI
-// - High-Contrast Lighting
+// Environment: Linux (Aurora 43) 
+// Fixes: Removed unused 'Time' resource from spawn system.
 
 use bevy::prelude::*;
 use std::collections::VecDeque;
@@ -39,8 +35,8 @@ fn main() {
     println!("------------------------------------------------");
     println!("  Bevy Ultimate Performance Test");
     println!("  Environment: {}", environment);
-    println!("  Lighting: Sun + Ambient + Point");
-    println!("  Controls: SPACE to spawn 10,000 cubes");
+    println!("  Shapes: Torus (Donuts)");
+    println!("  Controls: SPACE to spawn 10,000 shapes");
     println!("------------------------------------------------");
 
     App::new()
@@ -52,22 +48,20 @@ fn main() {
             }),
             ..default()
         }))
-        // RESOURCE: Ambient Light (Boosted Brightness)
         .insert_resource(AmbientLight {
             color: Color::srgb(0.6, 0.7, 0.8), 
             brightness: 800.0, 
         })
         .insert_resource(EnvironmentInfo { name: environment })
-        // RESOURCE: Track Stats (Batch count + Total Entities)
-        .insert_resource(SimulationStats { batch_count: 0, total_entities: 1 }) // Start at 1 (center cube)
+        .insert_resource(SimulationStats { batch_count: 0, total_entities: 1 })
         .add_systems(Startup, setup_scene)
         .add_systems(Update, (
-            spawn_stress_cubes,      
-            animate_cube_parallel,   
+            spawn_stress_shapes,      
+            animate_shapes_parallel,   
             animate_camera,          
             log_fps,                 
             update_fps_display,
-            update_entity_display    // <--- NEW SYSTEM
+            update_entity_display
         ))
         .run();
 }
@@ -83,8 +77,8 @@ struct SimulationStats {
 }
 
 #[derive(Component)]
-struct AnimatedCube {
-    rotation_speed: f32, // Allow different speeds for outer rings
+struct AnimatedShape {
+    rotation_speed: f32,
 }
 
 #[derive(Component)]
@@ -94,7 +88,7 @@ struct OrbitCamera { radius: f32, speed: f32, angle: f32 }
 struct FpsCounter { samples: VecDeque<f32>, last_update: f32, last_log: f32 }
 
 #[derive(Component)]
-struct EntityCountText; // Tag for the UI text
+struct EntityCountText;
 
 // ---------------- SCENE SETUP ----------------
 fn setup_scene(
@@ -103,9 +97,10 @@ fn setup_scene(
     mut materials: ResMut<Assets<StandardMaterial>>,
     env_info: Res<EnvironmentInfo>,
 ) {
-    // 1. Spawn Center Reference Cube
+    // 1. Spawn Center Reference Torus
     commands.spawn((
-        Mesh3d(meshes.add(Cuboid::new(2.0, 2.0, 2.0))),
+        // Torus::new(inner_radius, outer_radius)
+        Mesh3d(meshes.add(Torus::new(0.5, 1.5))), 
         MeshMaterial3d(materials.add(StandardMaterial {
             base_color: Color::srgb(0.9, 0.2, 0.2), // Red center
             metallic: 0.2,
@@ -113,21 +108,21 @@ fn setup_scene(
             ..default()
         })),
         Transform::from_xyz(0.0, 0.0, 0.0),
-        AnimatedCube { rotation_speed: 1.0 },
+        AnimatedShape { rotation_speed: 1.0 },
     ));
 
     // 2. Spawn Large Floor
     commands.spawn((
         Mesh3d(meshes.add(Plane3d::default().mesh().size(500.0, 500.0))), 
         MeshMaterial3d(materials.add(StandardMaterial {
-            base_color: Color::srgb(0.1, 0.1, 0.15), // Dark floor
+            base_color: Color::srgb(0.1, 0.1, 0.15),
             perceptual_roughness: 0.9,
             ..default()
         })),
         Transform::from_xyz(0.0, -30.0, 0.0),
     ));
 
-    // 3. Directional Light (The Sun)
+    // 3. Directional Light (Sun)
     commands.spawn((
         DirectionalLight {
             illuminance: 12_000.0,
@@ -170,14 +165,12 @@ fn setup_scene(
             ..default()
         })
         .with_children(|parent| {
-            // Title
             parent.spawn((
-                Text::new("🎮 Bevy Ultimate Stress Test"),
+                Text::new("🎮 Bevy Torus Test"),
                 TextFont { font_size: 32.0, ..default() },
                 TextColor(Color::srgb(0.9, 0.9, 1.0)),
             ));
 
-            // Subtitle
             parent.spawn((
                 Text::new(format!("Running on {}", env_info.name)),
                 TextFont { font_size: 20.0, ..default() },
@@ -185,7 +178,6 @@ fn setup_scene(
                 Node { margin: UiRect::top(Val::Px(5.0)), ..default() },
             ));
 
-            // Stats Container
             parent.spawn((
                 Node {
                     flex_direction: FlexDirection::Column,
@@ -193,7 +185,6 @@ fn setup_scene(
                     ..default()
                 },
             )).with_children(|stats| {
-                // FPS
                 stats.spawn((
                     Text::new("FPS: --"),
                     TextFont { font_size: 24.0, ..default() },
@@ -205,7 +196,6 @@ fn setup_scene(
                     },
                 ));
 
-                // Total Entities Display (NEW)
                 stats.spawn((
                     Text::new("Entities: 1"),
                     TextFont { font_size: 24.0, ..default() },
@@ -215,9 +205,8 @@ fn setup_scene(
                 ));
             });
 
-            // Instructions
             parent.spawn((
-                Text::new("✓ Method: Parallel Iterator\n[SPACE] Spawn 10,000 Cubes"),
+                Text::new("✓ Method: Parallel Iterator\n[SPACE] Spawn 10,000 Donuts"),
                 TextFont { font_size: 16.0, ..default() },
                 TextColor(Color::srgb(0.6, 0.6, 0.7)),
                 Node { margin: UiRect::top(Val::Px(20.0)), ..default() },
@@ -226,22 +215,20 @@ fn setup_scene(
 }
 
 // ---------------- SYSTEM: STRESS SPAWNER ----------------
-fn spawn_stress_cubes(
+fn spawn_stress_shapes(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     input: Res<ButtonInput<KeyCode>>,
-    time: Res<Time>,
+    // Removed 'time: Res<Time>' because we use batch_count for color now
     mut stats: ResMut<SimulationStats>,
 ) {
     if input.just_pressed(KeyCode::Space) {
         let count = 10_000;
         
-        // Update stats
         stats.batch_count += 1;
         stats.total_entities += count;
 
-        // Visuals: Cycle colors based on batch number
         let hue = (stats.batch_count as f32 * 0.5).sin() * 0.5 + 0.5;
         let mat_handle = materials.add(StandardMaterial {
             base_color: Color::hsl(hue * 360.0, 0.8, 0.5),
@@ -250,10 +237,10 @@ fn spawn_stress_cubes(
             ..default()
         });
 
-        let mesh_handle = meshes.add(Cuboid::new(0.5, 0.5, 0.5));
+        // Use Torus instead of Dodecahedron
+        // inner radius 0.15, outer radius 0.35 gives a nice donut shape
+        let mesh_handle = meshes.add(Torus::new(0.15, 0.35));
         
-        // DISPLACEMENT LOGIC:
-        // Each batch spawns further out (radius_offset) and higher up (y_offset)
         let radius_offset = stats.batch_count as f32 * 10.0; 
         let y_offset = stats.batch_count as f32 * 5.0;
 
@@ -262,7 +249,6 @@ fn spawn_stress_cubes(
         for i in 0..count {
             let i_f = i as f32;
             
-            // Formulas for "Tornado" distribution
             let angle = i_f * 0.1;
             let radius = 15.0 + radius_offset + (i_f * 0.01);
             let height = (i_f % 100.0) * 0.5 + y_offset - 10.0;
@@ -274,8 +260,7 @@ fn spawn_stress_cubes(
                 Mesh3d(mesh_handle.clone()), 
                 MeshMaterial3d(mat_handle.clone()),
                 Transform::from_xyz(x, height, z),
-                // Outer rings rotate slightly slower to look cool
-                AnimatedCube { 
+                AnimatedShape { 
                     rotation_speed: 1.0 - (stats.batch_count as f32 * 0.05).clamp(0.0, 0.8) 
                 }, 
             ));
@@ -283,33 +268,28 @@ fn spawn_stress_cubes(
     }
 }
 
-// ---------------- SYSTEM: UI UPDATER (NEW) ----------------
+// ---------------- SYSTEM: UI UPDATER ----------------
 fn update_entity_display(
     stats: Res<SimulationStats>, 
     mut query: Query<&mut Text, With<EntityCountText>>
 ) {
     if stats.is_changed() {
         for mut text in &mut query {
-            // Format number with commas (simple hack)
             text.0 = format!("Entities: {}", stats.total_entities);
         }
     }
 }
 
 // ---------------- SYSTEM: OPTIMIZED PARALLEL ANIMATION ----------------
-fn animate_cube_parallel(
-    mut query: Query<(&mut Transform, &AnimatedCube)>, 
+fn animate_shapes_parallel(
+    mut query: Query<(&mut Transform, &AnimatedShape)>, 
     time: Res<Time>
 ) {
     let delta_seconds = time.delta_secs();
     
-    // We cannot pre-calculate rotation perfectly because each cube now 
-    // has a unique 'rotation_speed', so we do the math inside the parallel loop.
-    // This is still extremely fast on 14 cores.
-    
-    query.par_iter_mut().for_each(|(mut transform, cube)| {
-        transform.rotate_y(delta_seconds * 0.8 * cube.rotation_speed);
-        transform.rotate_x(delta_seconds * 0.5 * cube.rotation_speed);
+    query.par_iter_mut().for_each(|(mut transform, shape)| {
+        transform.rotate_y(delta_seconds * 0.8 * shape.rotation_speed);
+        transform.rotate_x(delta_seconds * 0.5 * shape.rotation_speed);
     });
 }
 
@@ -359,4 +339,3 @@ fn log_fps(time: Res<Time>, mut query: Query<&mut FpsCounter>) {
         }
     }
 }
-
