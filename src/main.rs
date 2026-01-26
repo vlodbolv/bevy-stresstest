@@ -1,9 +1,12 @@
-// main.rs - Bevy 0.18 Ultimate Stress Test (Torus Edition - Clean)
+// main.rs - Bevy 0.18 Ultimate Stress Test (Icosahedron Edition - Final)
 // 
-// Environment: Linux (Aurora 43) 
-// Fixes: Removed unused 'Time' resource from spawn system.
+// Environment: Linux (Aurora 43) / i9-13900HK
+// Fixes: Removed unused 'mut' from positions vector. 
+// Result: Solid 20-sided geometry, flat shading, zero warnings.
 
 use bevy::prelude::*;
+use bevy::render::mesh::{Indices, PrimitiveTopology};
+use bevy::render::render_asset::RenderAssetUsages;
 use std::collections::VecDeque;
 use std::env;
 use std::fs;
@@ -35,7 +38,7 @@ fn main() {
     println!("------------------------------------------------");
     println!("  Bevy Ultimate Performance Test");
     println!("  Environment: {}", environment);
-    println!("  Shapes: Torus (Donuts)");
+    println!("  Shapes: Icosahedrons (20-sided Platonic Solid)");
     println!("  Controls: SPACE to spawn 10,000 shapes");
     println!("------------------------------------------------");
 
@@ -90,6 +93,82 @@ struct FpsCounter { samples: VecDeque<f32>, last_update: f32, last_log: f32 }
 #[derive(Component)]
 struct EntityCountText;
 
+// ---------------- CUSTOM MESH GENERATOR (ICOSAHEDRON) ----------------
+// 
+// Generates a 20-sided Icosahedron. 
+// Uses 3 orthogonal Golden Rectangles.
+fn create_icosahedron_mesh(radius: f32) -> Mesh {
+    let t = (1.0 + 5.0f32.sqrt()) / 2.0;
+
+    // The 12 vertices of an icosahedron (removed 'mut' here)
+    let positions = vec![
+        Vec3::new(-1.0,  t, 0.0).normalize() * radius,
+        Vec3::new( 1.0,  t, 0.0).normalize() * radius,
+        Vec3::new(-1.0, -t, 0.0).normalize() * radius,
+        Vec3::new( 1.0, -t, 0.0).normalize() * radius,
+
+        Vec3::new( 0.0, -1.0,  t).normalize() * radius,
+        Vec3::new( 0.0,  1.0,  t).normalize() * radius,
+        Vec3::new( 0.0, -1.0, -t).normalize() * radius,
+        Vec3::new( 0.0,  1.0, -t).normalize() * radius,
+
+        Vec3::new( t, 0.0, -1.0).normalize() * radius,
+        Vec3::new( t, 0.0,  1.0).normalize() * radius,
+        Vec3::new(-t, 0.0, -1.0).normalize() * radius,
+        Vec3::new(-t, 0.0,  1.0).normalize() * radius,
+    ];
+
+    // The 20 triangular faces (indices into positions)
+    let indices = vec![
+        0, 11, 5,   0, 5, 1,   0, 1, 7,   0, 7, 10,  0, 10, 11,
+        1, 5, 9,    5, 11, 4,  11, 10, 2, 10, 7, 6,  7, 1, 8,
+        3, 9, 4,    3, 4, 2,   3, 2, 6,   3, 6, 8,   3, 8, 9,
+        4, 9, 5,    2, 4, 11,  6, 2, 10,  8, 6, 7,   9, 8, 1,
+    ];
+
+    // FLAT SHADING LOGIC:
+    // We must duplicate vertices for every face so each face gets its own normal.
+    // 20 faces * 3 vertices = 60 unique vertices.
+    let mut final_positions = Vec::new();
+    let mut final_normals = Vec::new();
+    let mut final_indices = Vec::new();
+
+    for i in (0..indices.len()).step_by(3) {
+        let idx0 = indices[i];
+        let idx1 = indices[i+1];
+        let idx2 = indices[i+2];
+
+        let p0 = positions[idx0];
+        let p1 = positions[idx1];
+        let p2 = positions[idx2];
+
+        // Calculate face normal (Cross product)
+        let normal = (p1 - p0).cross(p2 - p0).normalize();
+
+        // Push new unique vertices
+        final_positions.push(p0);
+        final_positions.push(p1);
+        final_positions.push(p2);
+
+        final_normals.push(normal);
+        final_normals.push(normal);
+        final_normals.push(normal);
+
+        // Indices are now just linear: 0, 1, 2,  3, 4, 5...
+        let start_idx = i as u32;
+        final_indices.push(start_idx);
+        final_indices.push(start_idx + 1);
+        final_indices.push(start_idx + 2);
+    }
+
+    let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default());
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, final_positions);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, final_normals);
+    mesh.insert_indices(Indices::U32(final_indices));
+    mesh
+}
+
+
 // ---------------- SCENE SETUP ----------------
 fn setup_scene(
     mut commands: Commands,
@@ -97,21 +176,21 @@ fn setup_scene(
     mut materials: ResMut<Assets<StandardMaterial>>,
     env_info: Res<EnvironmentInfo>,
 ) {
-    // 1. Spawn Center Reference Torus
+    // 1. Center Reference Shape
     commands.spawn((
-        // Torus::new(inner_radius, outer_radius)
-        Mesh3d(meshes.add(Torus::new(0.5, 1.5))), 
+        Mesh3d(meshes.add(create_icosahedron_mesh(1.5))), 
         MeshMaterial3d(materials.add(StandardMaterial {
-            base_color: Color::srgb(0.9, 0.2, 0.2), // Red center
+            base_color: Color::srgb(0.9, 0.2, 0.2), 
             metallic: 0.2,
             perceptual_roughness: 0.4,
+            double_sided: true, 
             ..default()
         })),
         Transform::from_xyz(0.0, 0.0, 0.0),
         AnimatedShape { rotation_speed: 1.0 },
     ));
 
-    // 2. Spawn Large Floor
+    // 2. Large Floor
     commands.spawn((
         Mesh3d(meshes.add(Plane3d::default().mesh().size(500.0, 500.0))), 
         MeshMaterial3d(materials.add(StandardMaterial {
@@ -122,7 +201,7 @@ fn setup_scene(
         Transform::from_xyz(0.0, -30.0, 0.0),
     ));
 
-    // 3. Directional Light (Sun)
+    // 3. Sun
     commands.spawn((
         DirectionalLight {
             illuminance: 12_000.0,
@@ -132,7 +211,7 @@ fn setup_scene(
         Transform::from_xyz(50.0, 80.0, 50.0).looking_at(Vec3::ZERO, Vec3::Y),
     ));
 
-    // 4. Point Light (Fill)
+    // 4. Fill Light
     commands.spawn((
         PointLight {
             intensity: 2_000_000.0,
@@ -155,7 +234,7 @@ fn setup_scene(
         },
     ));
 
-    // 6. UI Overlay
+    // 6. UI
     commands
         .spawn(Node {
             width: Val::Percent(100.0),
@@ -166,7 +245,7 @@ fn setup_scene(
         })
         .with_children(|parent| {
             parent.spawn((
-                Text::new("🎮 Bevy Torus Test"),
+                Text::new("🎮 Bevy Icosahedron Test"),
                 TextFont { font_size: 32.0, ..default() },
                 TextColor(Color::srgb(0.9, 0.9, 1.0)),
             ));
@@ -206,7 +285,7 @@ fn setup_scene(
             });
 
             parent.spawn((
-                Text::new("✓ Method: Parallel Iterator\n[SPACE] Spawn 10,000 Donuts"),
+                Text::new("✓ Method: Parallel Iterator\n[SPACE] Spawn 10,000 Shapes"),
                 TextFont { font_size: 16.0, ..default() },
                 TextColor(Color::srgb(0.6, 0.6, 0.7)),
                 Node { margin: UiRect::top(Val::Px(20.0)), ..default() },
@@ -220,7 +299,6 @@ fn spawn_stress_shapes(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     input: Res<ButtonInput<KeyCode>>,
-    // Removed 'time: Res<Time>' because we use batch_count for color now
     mut stats: ResMut<SimulationStats>,
 ) {
     if input.just_pressed(KeyCode::Space) {
@@ -234,12 +312,12 @@ fn spawn_stress_shapes(
             base_color: Color::hsl(hue * 360.0, 0.8, 0.5),
             metallic: 0.5,
             perceptual_roughness: 0.4,
+            double_sided: true,
             ..default()
         });
 
-        // Use Torus instead of Dodecahedron
-        // inner radius 0.15, outer radius 0.35 gives a nice donut shape
-        let mesh_handle = meshes.add(Torus::new(0.15, 0.35));
+        // Use Icosahedron (20-sided)
+        let mesh_handle = meshes.add(create_icosahedron_mesh(0.5));
         
         let radius_offset = stats.batch_count as f32 * 10.0; 
         let y_offset = stats.batch_count as f32 * 5.0;
