@@ -1,9 +1,11 @@
-// main.rs - Bevy 0.18 Ultimate Stress Test (Icosahedron Edition - Translucent)
+// main.rs - Bevy 0.18 Ultimate Stress Test (Icosahedron Edition - Optimized)
 
-// Changes:
-// 1. Made all icosahedrons translucent to show refraction
-// 2. Added subsurface scattering for better light penetration
-// 3. Enhanced material properties for glass-like appearance
+// Optimizations:
+// 1. Added parallel FPS averaging over 3-second window
+// 2. Terminal logging every 5 seconds with entity count
+// 3. Optimized queries for better parallel performance
+// 4. Simplified and improved iterator usage
+// 5. Better resource management and idiomatic Rust patterns
 
 use bevy::prelude::*;
 use bevy::render::mesh::{Indices, PrimitiveTopology};
@@ -39,7 +41,7 @@ fn main() {
     println!("------------------------------------------------");
     println!("  Bevy Ultimate Performance Test");
     println!("  Environment: {}", environment);
-    println!("  Shapes: Translucent Icosahedrons (Glass-like)");
+    println!("  Shapes: Icosahedrons (20-sided Platonic Solid)");
     println!("  Controls: SPACE to spawn 10,000 shapes");
     println!("------------------------------------------------");
 
@@ -103,7 +105,7 @@ struct OrbitCamera {
 struct FpsCounter { 
     samples: VecDeque<f32>,
     last_update: f32,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Used for potential future logging
     sample_start: f32,
     rolling_sum: f32,
     sample_count: u32,
@@ -168,32 +170,6 @@ fn create_icosahedron_mesh(radius: f32) -> Mesh {
     mesh
 }
 
-// ---------------- GLASS-LIKE MATERIAL CREATOR ----------------
-fn create_glass_material(color: Color, alpha: f32) -> StandardMaterial {
-    StandardMaterial {
-        base_color: color.with_alpha(alpha),
-        metallic: 0.0,                // Non-metallic for glass
-        perceptual_roughness: 0.1,    // Smooth surface
-        reflectance: 0.5,             // Increased reflectivity
-        transmission: 0.8,            // Transmission for translucency
-        thickness: 0.3,               // Thickness for subsurface scattering
-        ior: 1.5,                     // Index of refraction (glass = 1.5)
-        alpha_mode: AlphaMode::Blend, // Enable blending for transparency
-        double_sided: true,           // Show both sides
-        cull_mode: None,              // Disable culling for transparency
-        ..default()
-    }
-}
-
-// ---------------- COLOR PALETTE FOR GLASS ICOSAHEDRONS ----------------
-fn get_glass_color(batch: u32, index: u32) -> Color {
-    let hue = ((batch as f32 * 0.3 + index as f32 * 0.001) * 360.0) % 360.0;
-    let saturation = 0.8;
-    let lightness = 0.7;
-    
-    Color::hsl(hue, saturation, lightness)
-}
-
 // ---------------- SCENE SETUP ----------------
 fn setup_scene(
     mut commands: Commands,
@@ -201,88 +177,65 @@ fn setup_scene(
     mut materials: ResMut<Assets<StandardMaterial>>,
     env_info: Res<EnvironmentInfo>,
 ) {
-    // 1. Center Glass Icosahedron
+    // Center Reference Shape
     commands.spawn((
-        Mesh3d(meshes.add(create_icosahedron_mesh(2.0))), 
-        MeshMaterial3d(materials.add(create_glass_material(
-            Color::srgb(0.9, 0.2, 0.2), // Red glass
-            0.3 // 70% transparent
-        ))),
-        Transform::from_xyz(0.0, 2.0, 0.0),
+        Mesh3d(meshes.add(create_icosahedron_mesh(1.5))), 
+        MeshMaterial3d(materials.add(StandardMaterial {
+            base_color: Color::srgb(0.9, 0.2, 0.2), 
+            metallic: 0.2,
+            perceptual_roughness: 0.4,
+            double_sided: true, 
+            ..default()
+        })),
+        Transform::from_xyz(0.0, 0.0, 0.0),
         AnimatedShape { rotation_speed: 1.0 },
     ));
 
-    // 2. Reflective Floor (Mirror-like)
+    // Large Floor
     commands.spawn((
         Mesh3d(meshes.add(Plane3d::default().mesh().size(500.0, 500.0))), 
         MeshMaterial3d(materials.add(StandardMaterial {
-            base_color: Color::srgb(0.05, 0.05, 0.1),
-            metallic: 0.9, // High metallic for reflections
-            perceptual_roughness: 0.1, // Smooth surface
-            reflectance: 0.8,
+            base_color: Color::srgb(0.1, 0.1, 0.15),
+            perceptual_roughness: 0.9,
             ..default()
         })),
-        Transform::from_xyz(0.0, -15.0, 0.0),
+        Transform::from_xyz(0.0, -30.0, 0.0),
     ));
 
-    // 3. Main Light (Brighter for better refraction)
+    // Sun
     commands.spawn((
         DirectionalLight {
-            illuminance: 20_000.0, // Increased brightness
+            illuminance: 12_000.0,
             shadows_enabled: true,
             ..default()
         },
-        Transform::from_xyz(50.0, 100.0, 50.0).looking_at(Vec3::ZERO, Vec3::Y),
+        Transform::from_xyz(50.0, 80.0, 50.0).looking_at(Vec3::ZERO, Vec3::Y),
     ));
 
-    // 4. Fill Lights (Multiple for better refraction visibility)
-    for (i, color) in [(1.0, 0.8, 0.6), (0.6, 0.8, 1.0), (1.0, 0.6, 0.8)].iter().enumerate() {
-        let angle = i as f32 * 120.0f32.to_radians();
-        let x = 80.0 * angle.cos();
-        let z = 80.0 * angle.sin();
-        
-        commands.spawn((
-            PointLight {
-                intensity: 1_500_000.0,
-                color: Color::srgb(color.0, color.1, color.2),
-                shadows_enabled: false, // Disable shadows for fill lights
-                range: 300.0,
-                ..default()
-            },
-            Transform::from_xyz(x, 40.0, z),
-        ));
-    }
-
-    // 5. Backlight (Behind camera for rim lighting)
+    // Fill Light
     commands.spawn((
         PointLight {
-            intensity: 1_000_000.0,
-            color: Color::srgb(1.0, 1.0, 0.9),
-            shadows_enabled: false,
-            range: 250.0,
+            intensity: 2_000_000.0,
+            color: Color::srgb(1.0, 0.8, 0.6),
+            shadows_enabled: true,
+            range: 200.0,
             ..default()
         },
-        Transform::from_xyz(-80.0, 60.0, -80.0),
+        Transform::from_xyz(-50.0, 30.0, -50.0),
     ));
 
-    // 6. Camera
+    // Camera
     commands.spawn((
         Camera3d::default(),
-        Transform::from_xyz(70.0, 60.0, 70.0).looking_at(Vec3::ZERO, Vec3::Y),
+        Transform::from_xyz(60.0, 50.0, 60.0).looking_at(Vec3::ZERO, Vec3::Y),
         OrbitCamera {
-            radius: 100.0, // Increased distance to see more objects
-            speed: 0.1,    // Slower rotation
+            radius: 80.0,
+            speed: 0.15,
             angle: 0.0,
         },
     ));
 
-    // 7. Skybox/Environment
-    commands.insert_resource(AmbientLight {
-        color: Color::srgb(0.8, 0.9, 1.0), // Bluer ambient
-        brightness: 1200.0,
-    });
-
-    // 8. UI
+    // UI
     commands.spawn(Node {
         width: Val::Percent(100.0),
         height: Val::Percent(100.0),
@@ -291,7 +244,7 @@ fn setup_scene(
         ..default()
     }).with_children(|parent| {
         parent.spawn((
-            Text::new("🔮 Bevy Glass Icosahedron Test"),
+            Text::new("🎮 Bevy Icosahedron Test"),
             TextFont { font_size: 32.0, ..default() },
             TextColor(Color::srgb(0.9, 0.9, 1.0)),
         ));
@@ -313,7 +266,7 @@ fn setup_scene(
                 TextFont { font_size: 24.0, ..default() },
                 TextColor(Color::srgb(0.2, 1.0, 0.5)),
                 FpsCounter {
-                    samples: VecDeque::with_capacity(150),
+                    samples: VecDeque::with_capacity(150), // 3 seconds at 50 FPS
                     last_update: 0.0,
                     sample_start: 0.0,
                     rolling_sum: 0.0,
@@ -331,7 +284,7 @@ fn setup_scene(
         });
 
         parent.spawn((
-            Text::new("✓ Glass-like translucency enabled\n✓ Refraction visible through objects\n[SPACE] Spawn 10,000 Glass Icosahedrons"),
+            Text::new("✓ Method: Parallel Iterator\n[SPACE] Spawn 10,000 Shapes"),
             TextFont { font_size: 16.0, ..default() },
             TextColor(Color::srgb(0.6, 0.6, 0.7)),
             Node { margin: UiRect::top(Val::Px(20.0)), ..default() },
@@ -353,39 +306,39 @@ fn spawn_stress_shapes(
         stats.batch_count += 1;
         stats.total_entities += COUNT;
 
-        info!("💎 Spawning Glass Batch {}: Total Entities {}", stats.batch_count, stats.total_entities);
+        let hue = (stats.batch_count as f32 * 0.5).sin() * 0.5 + 0.5;
+        let mat_handle = materials.add(StandardMaterial {
+            base_color: Color::hsl(hue * 360.0, 0.8, 0.5),
+            metallic: 0.5,
+            perceptual_roughness: 0.4,
+            double_sided: true,
+            ..default()
+        });
 
-        // Create mesh once and reuse
-        let mesh_handle = meshes.add(create_icosahedron_mesh(0.6));
+        let mesh_handle = meshes.add(create_icosahedron_mesh(0.5));
         
-        let radius_offset = stats.batch_count as f32 * 12.0; 
-        let y_offset = stats.batch_count as f32 * 6.0;
+        let radius_offset = stats.batch_count as f32 * 10.0; 
+        let y_offset = stats.batch_count as f32 * 5.0;
+
+        info!("💥 Spawning Batch {}: Total Entities {}", stats.batch_count, stats.total_entities);
 
         // Use iterators for better performance
         (0..COUNT).for_each(|i| {
             let i_f = i as f32;
             
-            // Create spiral formation
-            let angle = i_f * 0.12;
-            let radius = 20.0 + radius_offset + (i_f * 0.015);
-            let height = (i_f * 0.2).sin() * 8.0 + y_offset;
+            let angle = i_f * 0.1;
+            let radius = 15.0 + radius_offset + (i_f * 0.01);
+            let height = (i_f % 100.0) * 0.5 + y_offset - 10.0;
 
             let x = angle.cos() * radius;
             let z = angle.sin() * radius;
 
-            // Create unique glass material for each icosahedron
-            let color = get_glass_color(stats.batch_count, i);
-            let alpha = 0.25 + ((i_f * 0.01).sin() * 0.15); // Vary transparency slightly
-            
-            let material = materials.add(create_glass_material(color, alpha));
-
             commands.spawn((
                 Mesh3d(mesh_handle.clone()), 
-                MeshMaterial3d(material),
-                Transform::from_xyz(x, height, z)
-                    .with_scale(Vec3::splat(0.9 + (i_f * 0.0005).sin() * 0.2)), // Slight scale variation
+                MeshMaterial3d(mat_handle.clone()),
+                Transform::from_xyz(x, height, z),
                 AnimatedShape { 
-                    rotation_speed: 0.5 + (stats.batch_count as f32 * 0.03).clamp(0.0, 0.5) 
+                    rotation_speed: 1.0 - (stats.batch_count as f32 * 0.05).clamp(0.0, 0.8) 
                 }, 
             ));
         });
@@ -414,10 +367,8 @@ fn animate_shapes_parallel(
     // Parallel iteration for maximum CPU utilization
     query.par_iter_mut().for_each(|(mut transform, shape)| {
         let speed = shape.rotation_speed;
-        // Multi-axis rotation for more interesting refraction patterns
-        transform.rotate_y(delta_seconds * speed);
-        transform.rotate_x(delta_seconds * speed * 0.7);
-        transform.rotate_z(delta_seconds * speed * 0.3);
+        transform.rotate_y(delta_seconds * 0.8 * speed);
+        transform.rotate_x(delta_seconds * 0.5 * speed);
     });
 }
 
@@ -430,10 +381,10 @@ fn animate_camera(mut query: Query<(&mut Transform, &mut OrbitCamera)>, time: Re
         
         let x = orbit.angle.cos() * orbit.radius;
         let z = orbit.angle.sin() * orbit.radius;
-        let y = 50.0 + (orbit.angle * 0.3).sin() * 15.0; // Camera bobbing
+        let y = 40.0 + (orbit.angle * 0.5).sin() * 10.0; 
         
         transform.translation = Vec3::new(x, y, z);
-        transform.look_at(Vec3::new(0.0, 10.0, 0.0), Vec3::Y); // Look slightly upward
+        transform.look_at(Vec3::ZERO, Vec3::Y);
     }
 }
 
@@ -463,7 +414,7 @@ fn update_fps_display(time: Res<Time>, mut query: Query<(&mut Text, &mut FpsCoun
         }
         
         fps_counter.samples.push_back(fps);
-        if fps_counter.samples.len() > 150 {
+        if fps_counter.samples.len() > 150 { // Keep ~3 seconds of history
             fps_counter.samples.pop_front();
         }
     }
@@ -497,4 +448,3 @@ fn log_fps_periodic(time: Res<Time>, mut stats: ResMut<SimulationStats>, query: 
         stats.last_5s_log = current_time;
     }
 }
-
