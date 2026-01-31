@@ -1,66 +1,92 @@
 # Bevy ECS Stress Test & Benchmark
 
-A high-performance ECS (Entity Component System) stress test application built with [Bevy](https://bevyengine.org/). 
+A high-performance ECS (Entity Component System) stress test application built with **Bevy 0.18**.
 
-This project is designed to benchmark parallel system execution and rendering performance on Linux systems (specifically **Aurora DX** and **Fedora**) running inside **Distrobox** containers with GPU passthrough.
+This project benchmarks parallel system execution and rendering performance on Linux systems—specifically **Aurora DX** and **Fedora**—running inside **Distrobox** containers with GPU passthrough.
 
-![Rust](https://img.shields.io/badge/Rust-1.80+-orange.svg)
-![Bevy](https://img.shields.io/badge/Bevy-0.15-white.svg)
-![Platform](https://img.shields.io/badge/Platform-Linux%20(Aurora%2FBluefin)-blue.svg)
+---
 
 ## 🛠️ Environment Setup (CRITICAL)
 
-**Before cloning or running this repository**, you must set up your development environment correctly. This project relies on specific system dependencies (ALSA, Udev, Vulkan headers) often missing from standard containers.
+This project relies on specific system dependencies (ALSA, Udev, Vulkan headers) and GPU drivers often missing from standard containers.
 
-Please configure your environment using the **Bevy Scaffold** scripts:
+**Before cloning or running this repository**, configure your environment using the **Bevy Scaffold** scripts to ensure your Distrobox container is correctly initialized:
 
 👉 **[https://github.com/vlodbolv/bevy-scaffold](https://github.com/vlodbolv/bevy-scaffold)**
 
-Do not attempt to compile this project until you have run the setup from the repo above.
+---
 
 ## 🚀 Features
 
-* **Parallel ECS Iteration:** Utilizes `par_iter_mut()` to spread component updates across all available CPU cores (Optimized for 14-core i9-13900HK).
-* **Dynamic Stress Testing:** Spawns **10,000 entities** per batch at runtime without stalling the render loop.
-* **Smart Stacking Logic:** Dynamically calculates offsets to create a "Tornado" stacking effect, preventing mesh overlap as entity counts grow into the hundreds of thousands.
-* **Environment Awareness:** Auto-detects if running inside `Distrobox`, `Docker`, or Native Fedora/Aurora hosts.
-* **High-Fidelity Lighting:** Features a directional sun, ambient skylight, and point light fill with shadow mapping enabled.
-* **Real-time UI:** Monitors FPS, Frame Time, and Total Entity Count.
+* **Parallel ECS Iteration:** Leverages Bevy's internal task pool to spread component updates across all CPU cores (Optimized for high-core count architectures like the i9-13900HK).
+* **Dynamic Stress Testing:** Spawns **10,000 entities** per batch at runtime without stalling the main render loop.
+* **Tornado Stacking:** Dynamically calculates spatial offsets to create a spiraling effect, preventing mesh overlap as entity counts reach 100k+.
+* **Environment Awareness:** Auto-detects if running inside `Distrobox`, `Docker`, or Native hosts to adjust resource allocation.
+* **Modern Rendering:** Utilizes Bevy 0.18's `Mesh3d` and `MeshMaterial3d` with directional sun, ambient skylight, and shadow mapping.
+
+---
 
 ## 🎮 Controls
 
 | Input | Action |
-| :--- | :--- |
+| --- | --- |
 | **SPACE** | Spawn **10,000** new animated cubes. |
-| **Mouse** | The camera orbits automatically (visual cinematic mode). |
+| **Mouse** | The camera orbits automatically (Cinematic Mode). |
+
+---
 
 ## ⚡ Performance Optimization
 
-To achieve maximum framerates (100+ FPS with 50k+ entities), this project uses specific `Cargo.toml` profiles:
+To achieve maximum framerates (100+ FPS with 50k+ entities), the project utilizes aggressive `Cargo.toml` profiles:
 
-1.  **Dependency Optimization:** `[profile.dev.package."*"] opt-level = 3` ensures the Bevy engine is fully optimized even during development.
-2.  **LTO (Link Time Optimization):** Enabled for release builds to reduce binary size and improve ECS iteration speed.
-3.  **Parallel execution:** The `animate_cube_parallel` system handles transform updates on the CPU using multi-threading.
+1. **Dependency Optimization:** `[profile.dev.package."*"] opt-level = 3` ensures the Bevy engine itself is fully optimized even during debug builds.
+2. **LTO (Link Time Optimization):** Enabled for release builds to reduce binary size and improve cross-crate ECS iteration speed.
+3. **Parallel execution:** The `animate_cube_parallel` system handles transform updates on the CPU using Bevy's multi-threaded query iteration.
+
+---
 
 ## 🏃‍♀️ How to Run
 
 ### Development Mode
-Fast compilation, decent performance:
 
+Fast compilation, standard performance:
+
+```bash
 cargo run
 
-Benchmark Mode (Recommended)
-Slow compilation, maximum performance (enables LTO and full optimizations):
+```
 
+### Benchmark Mode (Recommended)
+
+Maximum performance (enables LTO and full engine optimizations):
+
+```bash
 cargo run --release
 
-📝 Code Overview
-main.rs: Contains all logic.
+```
 
-detect_environment(): Identifies the container/OS context.
+---
 
-animate_cube_parallel(): The core CPU stress test system.
+## 📝 Code Overview
 
-spawn_stress_cubes(): Handles batch generation and color cycling.
+The logic is contained within `main.rs`, organized into the following core functions:
 
+* **`detect_environment()`**: Identifies the container/OS context to output telemetry.
+* **`animate_cube_parallel()`**: The core CPU stress test system using `par_iter_mut()`.
+* **`spawn_stress_cubes()`**: Handles batch generation, color cycling, and procedural placement.
 
+---
+
+## 📂 Project structure
+
+```text
+bevy-benchmark/
+├─ hello/
+│  ├─ Cargo.toml         # Optimized profiles & Bevy 0.18 config
+│  └─ src/
+│     └─ main.rs         # Parallel systems & stress-test logic
+├─ init_distrobox.sh      # Environment creation script
+├─ setup_inside_distrobox.sh
+└─ README.md
+
+```
